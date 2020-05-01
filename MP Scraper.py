@@ -32,7 +32,6 @@ def get_MPS_details(url):
             'head', 
             'input',
             'script',
-            # there may be more elements you don't want, such as "style", etc.
             ]
 
     for t in raw_text:
@@ -59,29 +58,26 @@ def get_MPS_details(url):
     elem = soup.select('#ui-id-1 > div > div:nth-of-type(3) > p')
     if len(elem) != 0:
         timings.append(elem[0].text)
-        #logging.error('%s' % (elem[0].text))
     else:
         pass
 
     elem2 = soup.select('#ui-id-3 > div > div:nth-of-type(3) > p')
     if len(elem2) != 0:  #there is a second MPS
         timings.append(elem2[0].text)
-        #logging.error('%s' % (elem2[0].text))
     else:
         pass
 
     elem3 = soup.select('#ui-id-5 > div > div:nth-of-type(3) > p')
     if len(elem3) != 0:  #there is a third MPS
         timings.append(elem3[0].text)
-        #logging.error('%s' % (elem3[0].text))
     else:
         pass
 
     if len(timings) < 3:
         timings.extend(['N.A.']*(3-len(timings)))
-        #logging.error('%s' % (timings))
 
-    # Using regex to extract birth year and party
+
+    # Extract MPs' birth year and party using regex
 
     birthyearRegex = re.compile(r'''
         (Birth:)([\s\n\r\t]+)(\d{4})    # e.g. Year of Birth: \n \n \r\n\t\t\t\t\t\t1978
@@ -92,6 +88,8 @@ def get_MPS_details(url):
     else:
         birth_year = matched[0][2]
 
+    list_of_parties = pd.read_csv('Datasets/list-of-political-parties.csv')
+
     partyRegex = re.compile(r'''
         (Party:)([\W]+)([\w'’\s]+)(\r)    # E.g. Party: \n \n \r\n\t\t\t\t\t\tPeople's Action Party\r\n\t\t\t\t\t \n \n
         ''',re.VERBOSE)
@@ -99,8 +97,10 @@ def get_MPS_details(url):
     if len(matched) == 0:
         party = 'N.A.'
     else:
-        party = matched[0][2].replace("’", "'").replace("‘", "'")     # replace function called to clean up weird formatting with some apostrophes
-
+        party = matched[0][2].replace("’", "'").replace("‘", "'")     # Called the replace function to clean up weird formatting with some apostrophes
+        # use party abbrieviations
+        party = list_of_parties[list_of_parties['political_party'].str.contains(party)]['abbreviation'].values[0]
+            
     return birth_year, party, addresses, timings, num_of_MPSes
 
 def get_MP_details():
@@ -128,6 +128,8 @@ def get_MP_details():
         constituency = elem.text.strip()
         if constituency is None:
             constituency = 'N.A.'
+        elif 'GRC' in constituency:
+            constituency = constituency[:-4]     
         constituency_list.append(constituency)
 
     return name_list, constituency_list, url_list
@@ -135,7 +137,85 @@ def get_MP_details():
 def clean_up_timings(series):
     return series.apply(lambda timing : timing.split(':  ')[1] if timing !='N.A.' else timing)
 
+def clean_up_name(name):
+
+    if name[:3] == 'Mrs':
+        #logging.error('%s' % (name[:3]))
+        name = name[4:]
+    elif name[:2] in ('Mr', 'Dr', 'Ms'):
+        #logging.error('%s' % (name[:2]))
+        name = name[3:]
+    elif name[:4] == 'Miss':
+        #logging.error('%s' % (name[:4]))
+        name = name[5:]
+    elif name[:5] == 'Er Dr':
+        #logging.error('%s' % (name[:5]))
+        name = name[6:]
+    elif name[:13] == 'Assoc Prof Dr':
+        #logging.error('%s' % (name[:13]))
+        name = name[14:]
+    elif name[:10] == 'Assoc Prof':
+        name = name[11:]
+    elif name[:4] == 'Prof':
+        #logging.error('%s' % (name[:4]))
+        name = name[5:]
+
+    return name
+
+def get_vote_count(constituency, main_data, election_results):
+    if constituency == 'Nominated Member of Parliament' or pd.isnull(constituency):
+        return None
+    elif constituency == 'Non-Constituency Member of Parliament':
+        filt = main_data['Constituency'] == 'Non-Constituency Member of Parliament'
+        count = 0
+        name = main_data[filt].index[count]
+        count +=1
+        ward = election_results[election_results['candidates'].str.contains(name)]['constituency'].values[0]
+        filt2 = election_results['constituency'] == ward
+        return election_results[filt2]['vote_count'].sort_values(ascending = False).values[1]
+    else:
+        filt = election_results['constituency'] == constituency
+        return election_results[filt]['vote_count'].max()
+
+def get_vote_percentage(constituency, main_data, election_results):
+    if constituency == 'Nominated Member of Parliament' or pd.isnull(constituency):
+        return None
+    elif constituency == 'Non-Constituency Member of Parliament':
+        filt = main_data['Constituency'] == 'Non-Constituency Member of Parliament'
+        count = 0
+        name = main_data[filt].index[count]
+        count +=1
+        ward = election_results[election_results['candidates'].str.contains(name)]['constituency'].values[0]
+        filt2 = election_results['constituency'] == ward
+        return election_results[filt2]['vote_percentage'].sort_values(ascending = False).values[1]
+    else:
+        filt = election_results['constituency'] == constituency
+        return election_results[filt]['vote_percentage'].max()
+
+def get_constituency_type(constituency, main_data, election_results):
+
+    if constituency in ('Nominated Member of Parliament', 'Non-Constituency Member of Parliament') or pd.isnull(constituency):
+        return None
+    else:
+        num_of_MPs = len(election_results[election_results['constituency'] == constituency]['candidates'].values[0].split(' | '))
+        if num_of_MPs == 1:
+            return 'SMC'
+        else:
+            return 'GRC'
+
+def get_size_of_constituency_team(constituency, main_data, election_results):
+
+    if constituency in ('Nominated Member of Parliament', 'Non-Constituency Member of Parliament') or pd.isnull(constituency):
+        return None
+    else:
+        num_of_MPs = len(election_results[election_results['constituency'] == constituency]['candidates'].values[0].split(' | '))
+        return int(num_of_MPs)
+
 def main():
+
+    election_results = pd.read_csv('Datasets/parliamentary-general-election-results-by-candidate.csv')
+    filt = election_results['year'] == 2015
+    results_2015 = election_results[filt]
 
     name_list, constituency_list, url_list = get_MP_details()
 
@@ -164,11 +244,10 @@ def main():
         'MPS_2 Timing',
         'MPS_3 Venue',
         'MPS_3 Timing',
-        'Num_of_MPS'
+        'Num_of_MPS',
         ])
 
     for i in range(len(name_list)):
-        #logging.error('%s' % (name_list[i]))
         df.loc[len(df)] = [name_list[i],
                            birth_years[i],
                            constituency_list[i],
@@ -182,12 +261,29 @@ def main():
                            num_of_MPSes[i]
                            ]
 
+    ## Data Cleaning ##
+
     df['MPS_1 Timing'] = clean_up_timings(df['MPS_1 Timing'])
     df['MPS_2 Timing'] = clean_up_timings(df['MPS_2 Timing'])
     df['MPS_3 Timing'] = clean_up_timings(df['MPS_3 Timing'])
+    df['Name'] = df['Name'].apply(clean_up_name)
     
     df.replace('N.A.',np.NaN, inplace = True)
     df.set_index('Name', inplace= True)
+
+    ## Derivative / Additional Cols ##
+
+    df['vote_count'] = df['Constituency'].apply(lambda constituency : get_vote_count(constituency, main_data = df, election_results = results_2015))
+    df['vote_percentage'] = df['Constituency'].apply(lambda constituency: get_vote_percentage(constituency, main_data = df, election_results = results_2015))
+    df['constituency_type'] = df['Constituency'].apply(lambda constituency: get_constituency_type(constituency, main_data = df, election_results = results_2015))
+    df['size_of_constituency_team'] = df['Constituency'].apply(lambda constituency: get_size_of_constituency_team(constituency, main_data = df, election_results = results_2015))
+
+    ## Print interesting stats ##
+    
+    #print("The youngest MP is %s who was born in %s." % (df[df['Birth_Year'] == df['Birth_Year'].max()]['Name'].values[0], int(df[df['Birth_Year'] == df['Birth_Year'].max()]['Birth_Year'].values[0])))
+    #print("The oldest MP is %s who was born in %s." % (df[df['Birth_Year'] == df['Birth_Year'].min()]['Name'].values[0], int(df[df['Birth_Year'] == df['Birth_Year'].min()]['Birth_Year'].values[0])))
+
+    ## Export to CSV ##
 
     try:
         df.to_csv('Singapore MPs dataset.csv')
