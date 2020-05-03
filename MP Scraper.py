@@ -203,7 +203,7 @@ def get_constituency_type(constituency, main_data, election_results):
         else:
             return 'GRC'
 
-def get_size_of_constituency_team(constituency, main_data, election_results):
+def get_size_of_constituency(constituency, main_data, election_results):
 
     if constituency in ('Nominated Member of Parliament', 'Non-Constituency Member of Parliament') or pd.isnull(constituency):
         return None
@@ -273,15 +273,15 @@ def main():
 
     ## Derivative / Additional Cols ##
 
-    df['vote_count'] = df['Constituency'].apply(lambda constituency : get_vote_count(constituency, main_data = df, election_results = results_2015))
-    df['vote_percentage'] = df['Constituency'].apply(lambda constituency: get_vote_percentage(constituency, main_data = df, election_results = results_2015))
-    df['constituency_type'] = df['Constituency'].apply(lambda constituency: get_constituency_type(constituency, main_data = df, election_results = results_2015))
-    df['size_of_constituency_team'] = df['Constituency'].apply(lambda constituency: get_size_of_constituency_team(constituency, main_data = df, election_results = results_2015))
+    df['Vote_Count'] = df['Constituency'].apply(lambda constituency : get_vote_count(constituency, main_data = df, election_results = results_2015))
+    df['Vote_Percentage'] = df['Constituency'].apply(lambda constituency: get_vote_percentage(constituency, main_data = df, election_results = results_2015))
+    df['Constituency_Type'] = df['Constituency'].apply(lambda constituency: get_constituency_type(constituency, main_data = df, election_results = results_2015))
+    df['Size_of_Constituency'] = df['Constituency'].apply(lambda constituency: get_size_of_constituency(constituency, main_data = df, election_results = results_2015))
 
     ## Print interesting stats ##
-    
-    #print("The youngest MP is %s who was born in %s." % (df[df['Birth_Year'] == df['Birth_Year'].max()]['Name'].values[0], int(df[df['Birth_Year'] == df['Birth_Year'].max()]['Birth_Year'].values[0])))
-    #print("The oldest MP is %s who was born in %s." % (df[df['Birth_Year'] == df['Birth_Year'].min()]['Name'].values[0], int(df[df['Birth_Year'] == df['Birth_Year'].min()]['Birth_Year'].values[0])))
+
+    print("The youngest MP is %s who was born in %s." % (df['Birth_Year'].dropna().astype(float).idxmax(), int(df['Birth_Year'].dropna().astype(float).max())))
+    print("The oldest MP is %s who was born in %s." % (df['Birth_Year'].dropna().astype(float).idxmin(), int(df['Birth_Year'].dropna().astype(float).min())))
 
     ## Export to CSV ##
 
